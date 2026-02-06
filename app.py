@@ -2,101 +2,103 @@ import streamlit as st
 import pandas as pd
 import re
 
-# 1. Configurazione Pagina
-st.set_page_config(page_title="Luna Piena - Menu", page_icon="🌕", layout="centered")
+# 1. Configurazione - Tema pulito
+st.set_page_config(page_title="Luna Piena", layout="centered")
 
-# 2. Parametri Google Sheets
+# 2. Caricamento Dati
 SHEET_ID = "1sRbYNs_KA7Tm5IvqitJhYxYPVria8qDPdMliOPnFO_k"
 URL_MANGIARE = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Mangiare"
 URL_BERE = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Bere"
 
 @st.cache_data(ttl=30)
-def load_menu_data():
+def load_data():
     try:
-        f = pd.read_csv(URL_MANGIARE)
-        b = pd.read_csv(URL_BERE)
-        return f.fillna(""), b.fillna("")
+        f = pd.read_csv(URL_MANGIARE).fillna("")
+        b = pd.read_csv(URL_BERE).fillna("")
+        return f, b
     except:
         return None, None
 
-def get_price_float(price_str):
-    """Estrae il numero da una stringa tipo '15.50€'"""
+def get_price(price_str):
     try:
-        return float(re.sub(r'[^\d.]', '', price_str.replace(',', '.')))
+        return float(re.sub(r'[^\d.]', '', str(price_str).replace(',', '.')))
     except:
         return 0.0
 
-df_food, df_drinks = load_menu_data()
+# --- LOGICA CARRELLO (Risolve il bug del clic) ---
+if 'cart' not in st.session_state:
+    st.session_state.cart = []
 
-# --- HEADER ---
-st.title("🌕 LUNA PIENA")
+def add_to_cart(nome, prezzo):
+    st.session_state.cart.append({"nome": nome, "prezzo": prezzo})
+    st.toast(f"Aggiunto: {nome}")
+
+df_food, df_drinks = load_data()
+
+# --- INTERFACCIA MINIMAL ---
+st.title("Luna Piena")
 st.write("---")
 
 if df_food is not None:
-    # Inizializzazione Carrello
-    if 'cart' not in st.session_state:
-        st.session_state.cart = [] # Lista di dizionari con {nome, prezzo}
-
-    # --- SIDEBAR: IL CONTO ---
+    # Sidebar minimalista per il conto
     with st.sidebar:
-        st.header("🛒 Il tuo Tavolo")
-        tavolo = st.selectbox("Numero:", [f"{i:02d}" for i in range(1, 21)])
-        st.write("---")
+        st.subheader("Il tuo Tavolo")
+        tavolo = st.selectbox("Seleziona", [f"Tavolo {i:02d}" for i in range(1, 21)])
+        st.divider()
         
-        if not st.session_state.cart:
-            st.info("Aggiungi piatti per vedere il totale.")
-        else:
-            totale = 0.0
+        if st.session_state.cart:
+            totale = sum(item['prezzo'] for item in st.session_state.cart)
             for item in st.session_state.cart:
-                st.write(f"1x **{item['nome']}**")
-                totale += item['prezzo']
+                st.caption(f"1x {item['nome']} — {item['prezzo']:.2f}€")
             
-            st.write("---")
-            st.subheader(f"Totale: {totale:.2f} €")
-            
-            if st.button("🚀 INVIA ORDINE", use_container_width=True):
-                st.success("Comanda inviata in cucina!")
-                st.session_state.cart = []
-                st.balloons()
-            
-            if st.button("🗑️ Svuota Carrello", type="secondary"):
+            st.write(f"### Totale: {totale:.2f} €")
+            if st.button("Invia Ordine", use_container_width=True, type="primary"):
+                st.success("Inviato!")
                 st.session_state.cart = []
                 st.rerun()
+            if st.button("Svuota", use_container_width=True):
+                st.session_state.cart = []
+                st.rerun()
+        else:
+            st.write("Seleziona i piatti dal menù.")
 
-    # --- MENU PRINCIPALE ---
-    tab1, tab2 = st.tabs(["✨ PIATTI SCELTI", "🍷 LA CANTINA"])
+    # Tabs con stile pulito
+    tab_food, tab_drink = st.tabs(["Cucina", "Bevande"])
 
-    with tab1:
+    with tab_food:
         for cat in df_food['Categoria'].unique():
-            st.subheader(f"🔹 {cat.upper()}")
+            st.markdown(f"#### {cat}")
             items = df_food[df_food['Categoria'] == cat]
             for i, row in items.iterrows():
-                with st.container(border=True):
-                    c1, c2 = st.columns([3, 1])
-                    c1.markdown(f"### {row['Nome']}")
-                    c1.write(f"{row['Descrizione']}")
-                    # Bottone col prezzo
-                    if c2.button(f"➕ {row['Prezzo']}", key=f"f_{i}", use_container_width=True):
-                        st.session_state.cart.append({
-                            "nome": row['Nome'], 
-                            "prezzo": get_price_float(row['Prezzo'])
-                        })
-                        st.toast(f"Aggiunto: {row['Nome']}")
+                # Card minimalista senza bordi pesanti
+                col_txt, col_btn = st.columns([4, 1.2])
+                with col_txt:
+                    st.write(f"**{row['Nome']}**")
+                    st.caption(row['Descrizione'])
+                with col_btn:
+                    p_val = get_price(row['Prezzo'])
+                    # On_click risolve il bug della sincronizzazione
+                    st.button(f"{row['Prezzo']}", 
+                              key=f"f_{i}", 
+                              on_click=add_to_cart, 
+                              args=(row['Nome'], p_val),
+                              use_container_width=True)
+            st.write("")
 
-    with tab2:
+    with tab_drink:
         for cat in df_drinks['Categoria'].unique():
-            st.subheader(f"🔸 {cat.upper()}")
+            st.markdown(f"#### {cat}")
             items = df_drinks[df_drinks['Categoria'] == cat]
             for i, row in items.iterrows():
-                with st.container(border=True):
-                    c1, c2 = st.columns([3, 1])
-                    c1.markdown(f"### {row['Nome']}")
-                    c1.write(f"{row['Descrizione']}")
-                    if c2.button(f"➕ {row['Prezzo']}", key=f"d_{i}", use_container_width=True):
-                        st.session_state.cart.append({
-                            "nome": row['Nome'], 
-                            "prezzo": get_price_float(row['Prezzo'])
-                        })
-                        st.toast(f"Aggiunto: {row['Nome']}")
-else:
-    st.error("Dati non disponibili.")
+                col_txt, col_btn = st.columns([4, 1.2])
+                with col_txt:
+                    st.write(f"**{row['Nome']}**")
+                    st.caption(row['Descrizione'])
+                with col_btn:
+                    p_val = get_price(row['Prezzo'])
+                    st.button(f"{row['Prezzo']}", 
+                              key=f"d_{i}", 
+                              on_click=add_to_cart, 
+                              args=(row['Nome'], p_val),
+                              use_container_width=True)
+            st.write("")
