@@ -14,65 +14,68 @@ def load_menu_data():
     try:
         f = pd.read_csv(URL_MANGIARE)
         b = pd.read_csv(URL_BERE)
+        # Pulizia nomi colonne
+        f.columns = f.columns.str.strip()
+        b.columns = b.columns.str.strip()
         return f, b
     except:
         return None, None
 
 df_food, df_drinks = load_menu_data()
 
-# 3. Logo e Titolo con Stile
-st.markdown("<h1 style='text-align: center; color: #FFD700;'>🌕 LUNA PIENA</h1>", unsafe_content_allowed=True)
-st.markdown("<p style='text-align: center; font-style: italic; color: #999;'>Sapori autentici sotto il cielo stellato</p>", unsafe_content_allowed=True)
+# 3. Header Nativo (Senza HTML per evitare il crash)
+st.title("🌕 LUNA PIENA")
+st.caption("Sapori autentici sotto il cielo stellato")
 st.divider()
 
-if df_food is not None:
-    # Sidebar per il Carrello (rende tutto più ordinato)
+if df_food is not None and df_drinks is not None:
+    # Sidebar per il Carrello
     if 'cart' not in st.session_state:
         st.session_state.cart = {}
     
     with st.sidebar:
         st.title("🛒 Il tuo Ordine")
-        tavolo = st.selectbox("Tavolo", [f"Tavolo {i:02d}" for i in range(1, 21)])
+        tavolo = st.selectbox("Seleziona Tavolo", [f"Tavolo {i:02d}" for i in range(1, 21)])
         if not st.session_state.cart:
             st.write("Il carrello è vuoto")
         else:
             for item, qty in st.session_state.cart.items():
                 st.write(f"**{qty}x** {item}")
-            if st.button("🚀 INVIA COMANDA"):
+            if st.button("🚀 INVIA COMANDA", use_container_width=True):
                 st.success(f"Ordine inviato per il {tavolo}!")
                 st.session_state.cart = {}
                 st.rerun()
 
-    # Visualizzazione Menu
-    tab1, tab2 = st.tabs(["✨ CUCINA", "🍷 CANTINA"])
+    # Visualizzazione Menu con Tab
+    tab1, tab2 = st.tabs(["🍽️ CUCINA", "🍷 CANTINA"])
     
     with tab1:
+        # Raggruppiamo per categoria
         for cat in df_food['Categoria'].unique():
-            st.markdown(f"### {cat}")
+            st.subheader(cat)
             items = df_food[df_food['Categoria'] == cat]
             for i, row in items.iterrows():
                 with st.container(border=True):
-                    col_txt, col_price = st.columns([4, 1])
-                    col_txt.markdown(f"**{row['Nome']}**")
-                    col_txt.caption(row['Descrizione'])
-                    col_price.markdown(f"<span style='color: #FFD700; font-weight: bold;'>{row['Prezzo']}</span>", unsafe_content_allowed=True)
-                    if st.button(f"Ordina {row['Nome']}", key=f"f_{i}", use_container_width=True):
+                    c1, c2 = st.columns([3, 1])
+                    c1.markdown(f"**{row['Nome']}**")
+                    c1.caption(row['Descrizione'])
+                    # Visualizziamo il prezzo nel bottone stesso per pulizia
+                    if c2.button(f"{row['Prezzo']}", key=f"f_{i}", use_container_width=True):
                         st.session_state.cart[row['Nome']] = st.session_state.cart.get(row['Nome'], 0) + 1
                         st.toast(f"Aggiunto: {row['Nome']}")
 
     with tab2:
         for cat in df_drinks['Categoria'].unique():
-            st.markdown(f"### {cat}")
+            st.subheader(cat)
             items = df_drinks[df_drinks['Categoria'] == cat]
             for i, row in items.iterrows():
                 with st.container(border=True):
-                    col_txt, col_price = st.columns([4, 1])
-                    col_txt.markdown(f"**{row['Nome']}**")
-                    col_txt.caption(row['Descrizione'])
-                    col_price.markdown(f"<span style='color: #FFD700; font-weight: bold;'>{row['Prezzo']}</span>", unsafe_content_allowed=True)
-                    if st.button(f"Ordina {row['Nome']}", key=f"d_{i}", use_container_width=True):
+                    c1, c2 = st.columns([3, 1])
+                    c1.markdown(f"**{row['Nome']}**")
+                    c1.caption(row['Descrizione'])
+                    if c2.button(f"{row['Prezzo']}", key=f"d_{i}", use_container_width=True):
                         st.session_state.cart[row['Nome']] = st.session_state.cart.get(row['Nome'], 0) + 1
                         st.toast(f"Aggiunto: {row['Nome']}")
 
 else:
-    st.error("Errore nel caricamento. Verifica il file Google Sheets.")
+    st.error("Connessione al database fallita. Controlla il link del foglio Google.")
